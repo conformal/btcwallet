@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcutil/hdkeychain"
 	"github.com/btcsuite/btcwallet/walletdb"
 	_ "github.com/btcsuite/btcwallet/walletdb/bdb"
 )
@@ -25,6 +26,8 @@ var (
 		0xbe, 0x8b, 0x56, 0xc8, 0x83, 0x77, 0x95, 0x59, 0x8b,
 		0xb6, 0xc4, 0x40, 0xc0, 0x64,
 	}
+
+	rootKey, _ = hdkeychain.NewMaster(seed, &chaincfg.MainNetParams)
 
 	pubPassphrase   = []byte("_DJr{fL4H0O}*-0\n:V1izc)(6BomK")
 	privPassphrase  = []byte("81lUHXnOMZ@?XXd7O9xyDIWIbXX-lj")
@@ -274,7 +277,7 @@ func setupManager(t *testing.T) (tearDownFunc func(), db walletdb.DB, mgr *Manag
 			return err
 		}
 		err = Create(
-			ns, seed, pubPassphrase, privPassphrase,
+			ns, rootKey, pubPassphrase, privPassphrase,
 			&chaincfg.MainNetParams, fastScrypt, time.Time{},
 		)
 		if err != nil {

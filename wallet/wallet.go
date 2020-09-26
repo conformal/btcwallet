@@ -3730,18 +3730,19 @@ func (w *Wallet) Database() walletdb.DB {
 }
 
 // Create creates an new wallet, writing it to an empty database.  If the passed
-// seed is non-nil, it is used.  Otherwise, a secure random seed of the
+// root key is non-nil, it is used.  Otherwise, a secure random seed of the
 // recommended length is generated.
-func Create(db walletdb.DB, pubPass, privPass, seed []byte,
-	params *chaincfg.Params, birthday time.Time) error {
+func Create(db walletdb.DB, pubPass, privPass []byte,
+	rootKey *hdkeychain.ExtendedKey, params *chaincfg.Params,
+	birthday time.Time) error {
 
 	return create(
-		db, pubPass, privPass, seed, params, birthday, false,
+		db, pubPass, privPass, rootKey, params, birthday, false,
 	)
 }
 
 // CreateWatchingOnly creates an new watch-only wallet, writing it to
-// an empty database. No seed can be provided as this wallet will be
+// an empty database. No root key can be provided as this wallet will be
 // watching only.  Likewise no private passphrase may be provided
 // either.
 func CreateWatchingOnly(db walletdb.DB, pubPass []byte,
@@ -3752,24 +3753,26 @@ func CreateWatchingOnly(db walletdb.DB, pubPass []byte,
 	)
 }
 
-func create(db walletdb.DB, pubPass, privPass, seed []byte,
-	params *chaincfg.Params, birthday time.Time, isWatchingOnly bool) error {
+func create(db walletdb.DB, pubPass, privPass []byte,
+	rootKey *hdkeychain.ExtendedKey, params *chaincfg.Params,
+	birthday time.Time, isWatchingOnly bool) error {
 
-	if !isWatchingOnly {
-		// If a seed was provided, ensure that it is of valid length. Otherwise,
-		// we generate a random seed for the wallet with the recommended seed
-		// length.
-		if seed == nil {
-			hdSeed, err := hdkeychain.GenerateSeed(
-				hdkeychain.RecommendedSeedLen)
-			if err != nil {
-				return err
-			}
-			seed = hdSeed
+	// If no root key was provided, we create one now from a random seed.
+	// But only if this is not a watching-only wallet where the accounts are
+	// created individually from their xpubs.
+	if !isWatchingOnly && rootKey == nil {
+		hdSeed, err := hdkeychain.GenerateSeed(
+			hdkeychain.RecommendedSeedLen,
+		)
+		if err != nil {
+			return err
 		}
-		if len(seed) < hdkeychain.MinSeedBytes ||
-			len(seed) > hdkeychain.MaxSeedBytes {
-			return hdkeychain.ErrInvalidSeedLen
+
+		// Derive the master extended key from the seed.
+		rootKey, err = hdkeychain.NewMaster(hdSeed, params)
+		if err != nil {
+			return fmt.Errorf("failed to derive master extended " +
+				"key")
 		}
 	}
 
@@ -3784,7 +3787,8 @@ func create(db walletdb.DB, pubPass, privPass, seed []byte,
 		}
 
 		err = waddrmgr.Create(
-			addrmgrNs, seed, pubPass, privPass, params, nil, birthday,
+			addrmgrNs, rootKey, pubPass, privPass, params, nil,
+			birthday,
 		)
 		if err != nil {
 			return err
